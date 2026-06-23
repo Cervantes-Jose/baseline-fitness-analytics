@@ -364,12 +364,12 @@ def build_measurement_entries(day, day_idx, total_days, measurement_ids, user_id
 
     # Waist measured only on the first Monday of each month
     if day["date"].day <= 7 and measurement_ids.get(MEAS_WAIST):
-        waist = 34.0 - (1.5 * progress) + random.uniform(-0.3, 0.3)
+        Waist = 34.0 - (1.5 * progress) + random.uniform(-0.3, 0.3)
         entries.append({
             "id":             str(uuid.uuid4()),
             "user_id":        user_id,
             "measurement_id": measurement_ids[MEAS_WAIST],
-            "value":          round(waist, 1),
+            "value":          round(Waist, 1),
             "unit":           "in",
             "logged_at":      logged_at,
         })
