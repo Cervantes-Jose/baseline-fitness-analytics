@@ -83,6 +83,8 @@ EXERCISES = [
 MEAS_WEIGHT  = "Weight"
 MEAS_BODYFAT = "Body Fat"
 MEAS_WAIST   = "Waist"
+MEAS_SLEEP   = "Sleep Score"
+MEAS_STEPS   = "Steps"
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
@@ -232,15 +234,21 @@ def build_food_entries(day, user_id):
         ).isoformat()
 
         entries.append({
-            "id":        str(uuid.uuid4()),
-            "user_id":   user_id,
-            "name":      name,
-            "calories":  round(day["calories"]  * split),
-            "protein":   round(day["protein_g"] * split),
-            "carbs":     round(day["carbs_g"]   * split),
-            "fat":       round(day["fat_g"]     * split),
-            "logged_at": logged_at,
-        })
+    "id":         str(uuid.uuid4()),
+    "user_id":    user_id,
+    "name":       name,
+    "calories":   round(day["calories"]  * split),
+    "protein":    round(day["protein_g"] * split),
+    "carbs":      round(day["carbs_g"]   * split),
+    "fats":       round(day["fat_g"]     * split),
+    "hour":       hour,
+    "date":       day["date"].isoformat(),
+    "created_at": logged_at,
+    "serving":    1,
+    "unit":       "meal",
+    "food":       None,
+    "nutrients":  None,
+})
 
     return entries
 
@@ -273,13 +281,14 @@ def build_workout_session(day, day_idx, days, user_id):
     ).isoformat()
 
     session = {
-        "id":               session_id,
-        "user_id":          user_id,
-        "routine_id":       routine_id,
-        "started_at":       started_at,
-        "duration_seconds": random.randint(2700, 4500),  # 45–75 min
-        "notes":            None,
-    }
+    "id":           session_id,
+    "user_id":      user_id,
+    "routine_id":   routine_id,
+    "routine_name": day["routine_name"],
+    "date":         day["date"].isoformat(),
+    "created_at":   started_at,
+    "duration":     random.randint(2700, 4500),
+}
 
     # Build sets for each exercise in this routine
     routine_exercises = [e for e in EXERCISES if e[1] == routine_name]
@@ -316,7 +325,6 @@ def build_workout_session(day, day_idx, days, user_id):
             "session_id":    session_id,
             "exercise_name": ex_name,
             "sets":          sets_data,
-            "order_index":   order_idx,
         })
 
     return session, exercise_rows
@@ -324,17 +332,12 @@ def build_workout_session(day, day_idx, days, user_id):
 
 def build_measurement_entries(day, day_idx, total_days, measurement_ids, user_id):
     """
-    Weekly weigh-in on Mondays. Weight and body fat drift down realistically
-    over 6 months — ~8 lbs lost, ~2% body fat reduced — with noise added
-    so the trend isn't a perfect straight line.
+    Logs measurements based on frequency:
+    - Weight and Body Fat: weekly on Mondays
+    - Waist: monthly on first Monday
+    - Sleep Score and Steps: every day
     """
-    if not day["log_measurement"]:
-        return []
-
     progress = day_idx / total_days   # 0.0 at Jan 1, 1.0 at Jun 30
-
-    weight  = STARTING_WEIGHT_LBS  - (8.0 * progress) + random.uniform(-1.2, 1.2)
-    bodyfat = STARTING_BODYFAT_PCT - (2.0 * progress) + random.uniform(-0.4, 0.4)
 
     logged_at = datetime.combine(day["date"], datetime.min.time()).replace(
         hour=7, minute=random.randint(0, 15)
@@ -342,37 +345,70 @@ def build_measurement_entries(day, day_idx, total_days, measurement_ids, user_id
 
     entries = []
 
-    if measurement_ids.get(MEAS_WEIGHT):
+    # Sleep Score — every day
+    if measurement_ids.get(MEAS_SLEEP):
         entries.append({
             "id":             str(uuid.uuid4()),
             "user_id":        user_id,
-            "measurement_id": measurement_ids[MEAS_WEIGHT],
-            "value":          round(weight, 1),
-            "unit":           "lbs",
-            "logged_at":      logged_at,
+            "measurement_id": measurement_ids[MEAS_SLEEP],
+            "value":          float(day["sleep_score"]),
+            "unit":           "SS",
+            "date":           day["date"].isoformat(),
+            "created_at":     logged_at,
         })
 
-    if measurement_ids.get(MEAS_BODYFAT):
+    # Steps — every day
+    if measurement_ids.get(MEAS_STEPS):
+        steps = random.randint(4000, 9000) if not day["bad_week"] else random.randint(2000, 5000)
         entries.append({
             "id":             str(uuid.uuid4()),
             "user_id":        user_id,
-            "measurement_id": measurement_ids[MEAS_BODYFAT],
-            "value":          round(bodyfat, 1),
-            "unit":           "%",
-            "logged_at":      logged_at,
+            "measurement_id": measurement_ids[MEAS_STEPS],
+            "value":          float(steps),
+            "unit":           "steps",
+            "date":           day["date"].isoformat(),
+            "created_at":     logged_at,
         })
 
-    # Waist measured only on the first Monday of each month
-    if day["date"].day <= 7 and measurement_ids.get(MEAS_WAIST):
-        waist = 34.0 - (1.5 * progress) + random.uniform(-0.3, 0.3)
-        entries.append({
-            "id":             str(uuid.uuid4()),
-            "user_id":        user_id,
-            "measurement_id": measurement_ids[MEAS_WAIST],
-            "value":          round(waist, 1),
-            "unit":           "in",
-            "logged_at":      logged_at,
-        })
+    # Weekly measurements — Mondays only
+    if day["log_measurement"]:
+        weight  = STARTING_WEIGHT_LBS  - (8.0 * progress) + random.uniform(-1.2, 1.2)
+        bodyfat = STARTING_BODYFAT_PCT - (2.0 * progress) + random.uniform(-0.4, 0.4)
+
+        if measurement_ids.get(MEAS_WEIGHT):
+            entries.append({
+                "id":             str(uuid.uuid4()),
+                "user_id":        user_id,
+                "measurement_id": measurement_ids[MEAS_WEIGHT],
+                "value":          round(weight, 1),
+                "unit":           "lbs",
+                "date":           day["date"].isoformat(),
+                "created_at":     logged_at,
+            })
+
+        if measurement_ids.get(MEAS_BODYFAT):
+            entries.append({
+                "id":             str(uuid.uuid4()),
+                "user_id":        user_id,
+                "measurement_id": measurement_ids[MEAS_BODYFAT],
+                "value":          round(bodyfat, 1),
+                "unit":           "%",
+                "date":           day["date"].isoformat(),
+                "created_at":     logged_at,
+            })
+
+        # Waist — first Monday of each month only
+        if day["date"].day <= 7 and measurement_ids.get(MEAS_WAIST):
+            waist = 34.0 - (1.5 * progress) + random.uniform(-0.3, 0.3)
+            entries.append({
+                "id":             str(uuid.uuid4()),
+                "user_id":        user_id,
+                "measurement_id": measurement_ids[MEAS_WAIST],
+                "value":          round(waist, 1),
+                "unit":           "in",
+                "date":           day["date"].isoformat(),
+                "created_at":     logged_at,
+            })
 
     return entries
 
@@ -453,7 +489,7 @@ def main():
             build_measurement_entries(day, i, total_days, measurement_ids, USER_ID)
         )
 
-        habit_rows.append(build_daily_habit(day, USER_ID))
+        
 
     print(f"\nRows to insert:")
     print(f"  food_entries:        {len(food_rows)}")
@@ -477,7 +513,6 @@ def main():
     batch_insert("workout_sessions",    session_rows)
     batch_insert("session_exercises",   exercise_rows)
     batch_insert("measurement_entries", measurement_rows)
-    batch_insert("daily_habits",        habit_rows)
 
     print("\nDone. Verify row counts in Supabase Table Editor before writing SQL.")
 
