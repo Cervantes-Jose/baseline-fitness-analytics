@@ -16,8 +16,7 @@ Tables written to:
   - food_entries
   - workout_sessions
   - session_exercises
-  - measurement_entries
-  - daily_habits (sleep stored here)
+  - measurement_entries (sleep score and steps stored here as measurements)
 
 Setup:
   1. Copy .env.example to .env and fill in your values
@@ -412,24 +411,6 @@ def build_measurement_entries(day, day_idx, total_days, measurement_ids, user_id
 
     return entries
 
-
-def build_daily_habit(day, user_id):
-    """
-    One row per day in daily_habits capturing sleep and steps.
-    Sleep data here is what the SQL analysis will join against workout volume.
-    """
-    steps = random.randint(4000, 9000) if not day["bad_week"] else random.randint(2000, 5000)
-
-    return {
-        "id":          str(uuid.uuid4()),
-        "user_id":     user_id,
-        "date":        day["date"].isoformat(),
-        "sleep_hours": day["sleep_hours"],
-        "sleep_score": day["sleep_score"],
-        "steps":       steps,
-        "notes":       None,
-    }
-
 # ── MAIN ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -475,7 +456,6 @@ def main():
     session_rows     = []
     exercise_rows    = []
     measurement_rows = []
-    habit_rows       = []
 
     for i, day in enumerate(days):
         food_rows.extend(build_food_entries(day, USER_ID))
@@ -489,15 +469,12 @@ def main():
             build_measurement_entries(day, i, total_days, measurement_ids, USER_ID)
         )
 
-        
-
     print(f"\nRows to insert:")
     print(f"  food_entries:        {len(food_rows)}")
     print(f"  workout_sessions:    {len(session_rows)}")
     print(f"  session_exercises:   {len(exercise_rows)}")
     print(f"  measurement_entries: {len(measurement_rows)}")
-    print(f"  daily_habits:        {len(habit_rows)}")
-
+    
     # ── Insert in batches of 100 ──────────────────────────────────────────
     # Supabase has request size limits — batching avoids hitting them
     def batch_insert(table, rows, batch_size=100):
